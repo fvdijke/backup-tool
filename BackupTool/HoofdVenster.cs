@@ -28,6 +28,7 @@ public sealed class HoofdVenster : Form
         public readonly List<DataGridViewRow> Taken = new();
         public int I = -1;
         public bool Proef, Gestopt, Pauze, AlleRegels, Klaar;
+        public string? StopFout;                    // gestopt door de optie "Stoppen bij een fout": welke fout
         public readonly Stopwatch Klok = new(), KopieerKlok = new();
         public string Log = "";
         public int LogFout;
@@ -75,7 +76,7 @@ public sealed class HoofdVenster : Form
     Label lVrij = null!, lBestand = null!, lTaak = null!, lTijd = null!, lStatus = null!, lPlan = null!;
     RadioButton rbBij = null!, rbSpiegel = null!;
     CheckBox cbAlle = null!, cbAfsluiten = null!, cbTijdelijk = null!, cbVerborgen = null!, cbMapDatum = null!, cbFft = null!, cbDst = null!, cbHerstart = null!,
-        cbControle = null!, cbSchaduw = null!, cbPauzeAfwijking = null!;
+        cbControle = null!, cbSchaduw = null!, cbPauzeAfwijking = null!, cbStopFout = null!;
     NotifyIcon _klok = null!;
     ToolStripMenuItem _klokPauze = null!;
     NumericUpDown nPogingen = null!, nWacht = null!, nThreads = null!;
@@ -480,6 +481,9 @@ public sealed class HoofdVenster : Form
         cbSchaduw = Keuze<CheckBox>("Geopende bestanden kopiëren", xo2, 194,
             "Bestanden die in gebruik zijn (bijv. een open Outlook-.pst) worden uit een schaduwkopie (momentopname) van de schijf gekopieerd. " +
             "Vraagt beheerdersrechten; werkt niet voor netwerkschijven.");
+        cbStopFout = Keuze<CheckBox>("Stoppen bij een fout", xo2, 218,
+            "De hele backup stopt bij de eerste fout die definitief mislukt: een bestand dat na alle pogingen niet lukt, of een map die niet " +
+            "te lezen, maken of wissen is. Uit = de fout wordt gemeld en de backup gaat door met de rest.");
         NumericUpDown Getal(string tekst, int x, int min, int max, string tip)
         {
             var l = Lbl(tekst, x, 255, Gewoon, r);
@@ -786,6 +790,7 @@ public sealed class HoofdVenster : Form
         cbFft.Checked = p.Fft; cbDst.Checked = p.Dst; cbHerstart.Checked = p.Herstart;
         cbControle.Checked = p.Controleren; cbSchaduw.Checked = p.Schaduwkopie;
         cbPauzeAfwijking.Checked = p.PauzeBijAfwijking; cbPauzeAfwijking.Enabled = p.Controleren;
+        cbStopFout.Checked = p.StopBijFout;
         nPogingen.Value = Math.Clamp(p.Pogingen, 0, 99); nWacht.Value = Math.Clamp(p.Wacht, 0, 600); nThreads.Value = Math.Clamp(p.Threads, 1, 32);
         VulDoelen(p.Doel);
         ToonPlan();
@@ -809,6 +814,7 @@ public sealed class HoofdVenster : Form
         if (i >= 0 && _doelen[i] != "*") p.Doel = _doelen[i];
         p.Submap = tbSubmap.Text.Trim(); p.Log = LogMap(tbLog.Text);
         p.Controleren = cbControle.Checked; p.Schaduwkopie = cbSchaduw.Checked; p.PauzeBijAfwijking = cbPauzeAfwijking.Checked;
+        p.StopBijFout = cbStopFout.Checked;
         p.Modus = rbSpiegel.Checked ? "spiegelen" : "bijwerken";
         p.AlleRegels = cbAlle.Checked; p.Afsluiten = cbAfsluiten.Checked;
         p.Tijdelijk = cbTijdelijk.Checked; p.Verborgen = cbVerborgen.Checked; p.MapDatum = cbMapDatum.Checked;
@@ -1049,6 +1055,8 @@ public sealed class HoofdVenster : Form
             // bij een geplande backup zit er niemand achter de pc: dan niet pauzeren
             BijAfwijking = cbControle.Checked && cbPauzeAfwijking.Checked && !_o.Automatisch ? rel => BeginInvoke(() => BijAfwijking(run, rel)) : null,
             TestAfwijking = _o.TestAfwijking,
+            BijFout = cbStopFout.Checked ? tekst => BeginInvoke(() => StopNaFout(run, tekst)) : null,
+            StopBijFout = cbStopFout.Checked,
         };
         if (cbTijdelijk.Checked) i.SlaBestanden.AddRange(TijdelijkePatronen);
         if (IsSchijf(bron)) i.SlaMappen.AddRange(GeenMappen);
@@ -1104,10 +1112,18 @@ public sealed class HoofdVenster : Form
 
         if (run.Gestopt)
         {
-            ZetBalkje(rij, (rij.Cells["voortgang"].Tag as Balkje)?.Deel ?? -1, "gestopt", BalkGrijs);
-            ZetStatus(rij, "gestopt");
-            LogSchrijf("Gestopt door de gebruiker.");
-            Noteer(run, naam, "gestopt");
+            bool doorFout = run.StopFout is not null;
+            ZetBalkje(rij, (rij.Cells["voortgang"].Tag as Balkje)?.Deel ?? -1, doorFout ? "fout" : "gestopt", doorFout ? BalkRood : BalkGrijs);
+            ZetStatus(rij, doorFout ? "mislukt" : "gestopt");
+            LogSchrijf(doorFout ? "Gestopt na een fout." : "Gestopt door de gebruiker.");
+            // wat er tot het stoppen wél gebeurde, telt mee in het overzicht
+            run.Overzicht.Add(new OverzichtRegel
+            {
+                Naam = naam, Opmerking = doorFout ? "gestopt na een fout" : "gestopt",
+                Gekopieerd = motor.Bestanden.Gekopieerd, Bytes = motor.Bytes.Gekopieerd, Overgeslagen = motor.Bestanden.Overgeslagen,
+                Mislukt = motor.Bestanden.Mislukt + motor.Mappen.Mislukt, ExtraBest = motor.Bestanden.Extra, ExtraMap = motor.Mappen.Extra,
+                Gewist = motor.Verwijderd, Gecontroleerd = motor.Gecontroleerd, ViaSchaduw = motor.ViaSchaduw,
+            });
             return;
         }
         var sleutel = code >= 16 ? "mislukt" : code >= 8 ? "fouten" : run.Proef ? "proef" : "klaar";
@@ -1195,6 +1211,18 @@ public sealed class HoofdVenster : Form
         lTijd.Text = Opmaak.Tijd(run.Klok.Elapsed) + (aan ? Punt + "gepauzeerd" : "");
     }
 
+    // optie "Stoppen bij een fout": de eerste definitieve fout stopt de hele backup
+    void StopNaFout(Run run, string fout)
+    {
+        if (run.Klaar || run.Gestopt) return;
+        run.StopFout = fout;
+        ToonRegels(int.MaxValue);
+        var tekst = $"Backup gestopt vanwege een fout (optie 'Stoppen bij een fout'): {fout}";
+        Uitvoer(tekst, Regelsoort.Fout); LogSchrijf(tekst);
+        _klok.ShowBalloonTip(15000, "Backup gestopt na een fout", fout, ToolTipIcon.Error);
+        Stoppen();
+    }
+
     void Stoppen()
     {
         var run = _run; if (run is null || run.Klaar) return;
@@ -1222,8 +1250,9 @@ public sealed class HoofdVenster : Form
         bool slecht = run.Gestopt || run.Taken.Any(r => (r.Cells["status"].Value as string ?? "") is var s
             && (s.Contains("Mislukt") || s.Contains("fouten") || s.Contains("Bron mist")));
         lStatus.ForeColor = slecht ? Oranje : Groen;
-        lStatus.Text = $"{(run.Proef ? "Proefdraai" : "Backup")} {(run.Gestopt ? "gestopt" : "klaar")} na {Opmaak.Tijd(run.Klok.Elapsed)}{Punt}{string.Join(", ", tel)}";
-        lTaak.Text = run.Gestopt ? "Gestopt" : run.Proef ? "Proefdraai klaar" : "Backup klaar";
+        lStatus.Text = $"{(run.Proef ? "Proefdraai" : "Backup")} {(run.StopFout is not null ? "gestopt na een fout" : run.Gestopt ? "gestopt" : "klaar")} na {Opmaak.Tijd(run.Klok.Elapsed)}{Punt}{string.Join(", ", tel)}";
+        lTaak.Text = run.StopFout is not null ? "Gestopt na een fout" : run.Gestopt ? "Gestopt" : run.Proef ? "Proefdraai klaar" : "Backup klaar";
+        if (run.StopFout is not null) lStatus.ForeColor = Rood;
         lTijd.Text = Opmaak.Tijd(run.Klok.Elapsed) + Punt + $"{run.Fouten} fout{(run.Fouten == 1 ? "" : "en")}";
         lBestand.Text = "Log: " + run.Log;
         ZetBezig(false);

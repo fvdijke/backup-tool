@@ -137,6 +137,12 @@ Sommige systemen (vooral FAT en oudere NAS) verschuiven tijden een uur bij zomer
 ## Herstartbaar kopiëren (netwerk)
 Een groot bestand dat halverwege wordt onderbroken (bijvoorbeeld door een haperend netwerk), gaat bij een nieuwe poging verder waar het gebleven was in plaats van opnieuw te beginnen. Iets trager; vooral nuttig voor een NAS of netwerkschijf.
 
+## Stoppen bij een fout
+Met deze optie stopt de hele backup bij de eerste fout die definitief mislukt: een bestand dat na alle pogingen (zie hieronder) nog steeds niet lukt, of een map die niet te lezen, te maken of te wissen is. De bron waar het misging krijgt de status Mislukt, bronnen die nog niet aan de beurt waren staan in het overzicht als "niet uitgevoerd". Je krijgt een melding, ook bij de klok, en de fout staat in het log.
+• Een afwijkende hash-controle telt hier niet als fout: die volgt de eigen regeling (pauzeren of opnieuw proberen).
+• Een bron die niet gevonden wordt ("Bron mist") wordt gewoon overgeslagen.
+• Uit (standaard): de fout wordt gemeld en de backup gaat door met de rest.
+
 ## Pogingen en Wacht
 Lukt een bestand niet (bijvoorbeeld even in gebruik), dan wordt het zo vaak opnieuw geprobeerd als bij Pogingen staat, met het aantal seconden van Wacht ertussen. 0 pogingen = meteen opgeven en doorgaan met het volgende bestand.
 

@@ -29,6 +29,9 @@ public sealed class Instellingen
     public bool Controleren;              // na elk gekopieerd bestand de SHA-256-hash van kopie en origineel vergelijken
     // controle wijkt af: de motor pauzeert zichzelf en meldt het bestand (null = niet pauzeren, gewoon opnieuw proberen)
     public Action<string>? BijAfwijking;
+    // een definitieve fout (bestand na alle pogingen mislukt, map niet te lezen/maken/wissen): de melding
+    public Action<string>? BijFout;
+    public bool StopBijFout;              // bij de eerste definitieve fout meteen stoppen (de motor stopt zichzelf)
     public string? TestAfwijking;         // test: bij een bestand dat hierop eindigt één keer een afwijking nabootsen
     // bestand in gebruik: geeft het pad van hetzelfde bestand in een schaduwkopie (momentopname), of null
     public Func<string, string?>? Schaduwpad;
@@ -47,7 +50,8 @@ public sealed class Kopieermotor
     readonly string _bron, _doel;
     readonly Instellingen _i;
     readonly Action<string, Regelsoort> _meld;
-    readonly CancellationToken _stop;
+    readonly CancellationToken _stop;             // stoppen door de gebruiker óf door de motor zelf (stoppen bij een fout)
+    readonly CancellationTokenSource _eigenStop;
     readonly ManualResetEventSlim _door = new(true);   // uit = gepauzeerd
     readonly Regex[] _slaBestNaam, _slaMapNaam;
     readonly HashSet<string> _slaBestPad, _slaMapPad;
@@ -75,7 +79,9 @@ public sealed class Kopieermotor
 
     public Kopieermotor(string bron, string doel, Instellingen i, Action<string, Regelsoort> meld, CancellationToken stop)
     {
-        _bron = Normaal(bron); _doel = Normaal(doel); _i = i; _meld = meld; _stop = stop;
+        _bron = Normaal(bron); _doel = Normaal(doel); _i = i; _meld = meld;
+        _eigenStop = CancellationTokenSource.CreateLinkedTokenSource(stop);
+        _stop = _eigenStop.Token;
         static bool IsPad(string s) => s.Contains('\\');
         _slaBestNaam = i.SlaBestanden.Where(s => !IsPad(s)).Select(Patroon).ToArray();
         _slaMapNaam = i.SlaMappen.Where(s => !IsPad(s)).Select(Patroon).ToArray();
@@ -101,6 +107,12 @@ public sealed class Kopieermotor
         _slaMapNaam.Any(r => r.IsMatch(naam)) || _slaMapPad.Contains(bronPad);
 
     void Meld(string tekst, Regelsoort soort = Regelsoort.Gewoon) => _meld(tekst, soort);
+    void Fout(string tekst)                                                 // definitieve fout
+    {
+        _meld(tekst, Regelsoort.Fout);
+        _i.BijFout?.Invoke(tekst);
+        if (_i.StopBijFout) _eigenStop.Cancel();                            // niets meer kopiëren na deze fout
+    }
     void MeldRegel(string klasse, long grootte, string rel)
     {
         if (_i.ToonBestanden) Meld($"  {klasse,-12}{(grootte >= 0 ? Opmaak.Kort(grootte) : ""),12}   {rel}");
@@ -163,7 +175,7 @@ public sealed class Kopieermotor
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 Mappen.Mislukt++;
-                Meld($"FOUT: map niet te lezen ({Win32Tekst(ex)}): {bronMap}", Regelsoort.Fout);
+                Fout($"FOUT: map niet te lezen ({Win32Tekst(ex)}): {bronMap}");
                 continue;
             }
             var doelItems = doelBestaat ? LijstVeilig(doelMap) : Array.Empty<FileSystemInfo>();
@@ -300,8 +312,8 @@ public sealed class Kopieermotor
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                Meld($"FOUT: niet te wissen ({Win32Tekst(ex)}): {pad}", Regelsoort.Fout);
                 if (isMap) Mappen.Mislukt++; else Bestanden.Mislukt++;
+                Fout($"FOUT: niet te wissen ({Win32Tekst(ex)}): {pad}");
             }
         }
 
@@ -313,7 +325,7 @@ public sealed class Kopieermotor
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
                     Mappen.Mislukt++; Mappen.Gekopieerd--;
-                    Meld($"FOUT: map niet te maken ({Win32Tekst(ex)}): {m}", Regelsoort.Fout);
+                    Fout($"FOUT: map niet te maken ({Win32Tekst(ex)}): {m}");
                 }
             }
 
@@ -379,8 +391,8 @@ public sealed class Kopieermotor
             if (fout is 32 or 33 && _i.Schaduwpad is null) tekst += "; tip: zet 'Geopende bestanden kopiëren' aan";
             if (poging >= _i.Pogingen)
             {
-                Meld($"FOUT {fout} ({tekst}): {k.Rel}", Regelsoort.Fout);
                 Tel(false, k.Grootte);
+                Fout($"FOUT {fout} ({tekst}): {k.Rel}");
                 return;
             }
             Meld($"Opnieuw proberen ({poging + 1}/{_i.Pogingen}) over {_i.WachtSec} s - fout {fout} ({tekst}): {k.Rel}");

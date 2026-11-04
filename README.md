@@ -35,6 +35,7 @@ Download `Backup.exe` bij de [nieuwste release](https://github.com/fvdijke/backu
 **Opties**
 - **Kopie controleren (hash)**: na elk gekopieerd bestand worden de SHA-256-hashes van origineel en kopie
   vergeleken. Wijkt een kopie af, dan kan de backup automatisch op pauze gaan.
+- **Stoppen bij een fout**: de hele backup stopt bij de eerste fout die definitief mislukt.
 - **Geopende bestanden kopiëren** via een schaduwkopie (Volume Shadow Copy), bijvoorbeeld een open
   Outlook-.pst.
 - Tijdelijke en verborgen bestanden overslaan, datums van mappen meekopiëren, tijdverschil FAT/exFAT/NAS en

@@ -203,8 +203,9 @@ public sealed class TotalenVenster : Form
                 continue;
             }
             int i = t.Rows.Add(x.Naam, Opmaak.Bestanden(x.Gekopieerd), Opmaak.Kort(x.Bytes), Opmaak.Aantal(x.Overgeslagen), Opmaak.Aantal(x.Mislukt),
-                HoofdVenster.Extra(x), x.Mislukt > 0 ? $"{Opmaak.Aantal(x.Mislukt)} mislukt" : x.Gecontroleerd > 0 ? "klaar, gecontroleerd" : "klaar");
-            t.Rows[i].Cells[6].Style.ForeColor = x.Mislukt > 0 ? Rood : Groen;
+                HoofdVenster.Extra(x), x.Opmerking.StartsWith("gestopt") ? x.Opmerking
+                    : x.Mislukt > 0 ? $"{Opmaak.Aantal(x.Mislukt)} mislukt" : x.Gecontroleerd > 0 ? "klaar, gecontroleerd" : "klaar");
+            t.Rows[i].Cells[6].Style.ForeColor = x.Opmerking == "gestopt" ? Oranje : x.Mislukt > 0 || x.Opmerking.Length > 0 ? Rood : Groen;
         }
         int s = t.Rows.Add("Totaal", Opmaak.Bestanden(o.Sum(x => x.Gekopieerd)), Opmaak.Kort(o.Sum(x => x.Bytes)),
             Opmaak.Aantal(o.Sum(x => x.Overgeslagen)), Opmaak.Aantal(o.Sum(x => x.Mislukt)), "", "");

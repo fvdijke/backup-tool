@@ -33,6 +33,7 @@ public sealed class Profiel
     [JsonPropertyName("herstart")] public bool Herstart { get; set; }
     [JsonPropertyName("controleren")] public bool Controleren { get; set; }           // na elk bestand de hash van kopie en origineel vergelijken
     [JsonPropertyName("pauzeBijAfwijking")] public bool PauzeBijAfwijking { get; set; } = true;   // wijkt de controle af: backup op pauze
+    [JsonPropertyName("stopBijFout")] public bool StopBijFout { get; set; }           // hele backup stoppen bij de eerste definitieve fout
     [JsonPropertyName("schaduwkopie")] public bool Schaduwkopie { get; set; }         // geopende bestanden via een momentopname
     [JsonPropertyName("plan")] public Planning Plan { get; set; } = new();
     // uit de PowerShell-versie; niet meer in het venster, blijft alleen bewaard
