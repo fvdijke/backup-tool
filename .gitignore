@@ -1,0 +1,20 @@
+# bouwbestanden
+bin/
+obj/
+*.user
+.vs/
+
+# van App/ alleen de gebouwde Backup.exe; oude kopieën niet
+App/*
+!App/Backup.exe
+Versies/
+
+# de eerdere PowerShell-versie hoort niet in deze repository
+backup.ps1
+maak-icoon.ps1
+backup-icoon.png
+/backup.ico
+
+# persoonlijke instellingen: eigen schijven, mappen en planning
+backup-profielen.json
+*.json.nieuw

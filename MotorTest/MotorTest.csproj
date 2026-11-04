@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Vergelijkt de eigen kopieermotor met robocopy op dezelfde testmappen. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\BackupTool\Kopieermotor.cs" Link="Kopieermotor.cs" />
+    <Compile Include="..\BackupTool\Opmaak.cs" Link="Opmaak.cs" />
+  </ItemGroup>
+
+</Project>
