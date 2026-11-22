@@ -273,7 +273,9 @@ public sealed class Kopieermotor
     // null = gelijk of overslaan; anders de reden om te kopiëren
     string? Vergelijk(FileInfo bron, FileInfo doel)
     {
-        long verschil = bron.LastWriteTimeUtc.Ticks - doel.LastWriteTimeUtc.Ticks;
+        // ruwe Windows-tijden: .NET kan geen datum na het jaar 9999 lezen, Windows staat die wel toe
+        ulong tb = SchrijfTijd(bron), td = SchrijfTijd(doel);
+        long verschil = tb >= td ? (long)Math.Min(tb - td, long.MaxValue) : -(long)Math.Min(td - tb, long.MaxValue);
         long marge = _i.Fft ? TimeSpan.TicksPerSecond * 2 : 0;
         bool tijdGelijk = Math.Abs(verschil) <= marge
             || (_i.Dst && Math.Abs(Math.Abs(verschil) - TimeSpan.TicksPerHour) <= Math.Max(marge, TimeSpan.TicksPerSecond * 2));
@@ -419,6 +421,24 @@ public sealed class Kopieermotor
     delegate uint VoortgangRoutine(long totaal, long gedaan, long stroomGrootte, long stroomGedaan, uint stroom,
         uint reden, IntPtr bron, IntPtr doel, IntPtr data);
 
+    [StructLayout(LayoutKind.Sequential)]
+    struct BestandsGegevens
+    {
+        public uint Kenmerken;
+        public uint AanmaakLaag, AanmaakHoog, GelezenLaag, GelezenHoog, SchrijfLaag, SchrijfHoog;
+        public uint GrootteHoog, GrootteLaag;
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool GetFileAttributesEx(string pad, int niveau, out BestandsGegevens gegevens);
+
+    // wijzigingsdatum als ruwe FILETIME (100 ns sinds 1601), ook als .NET de datum ongeldig vindt
+    static ulong SchrijfTijd(FileInfo f)
+    {
+        if (GetFileAttributesEx(Lang(f.FullName), 0, out var g)) return ((ulong)g.SchrijfHoog << 32) | g.SchrijfLaag;
+        try { return (ulong)f.LastWriteTimeUtc.ToFileTimeUtc(); } catch (ArgumentException) { return 0; }
+    }
+
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     static extern bool CopyFileEx(string bron, string doel, VoortgangRoutine routine, IntPtr data, ref int annuleer, uint vlaggen);
 
@@ -479,7 +499,8 @@ public sealed class Kopieermotor
             File.SetCreationTimeUtc(k.Doel, b.CreationTimeUtc);
             File.SetLastWriteTimeUtc(k.Doel, b.LastWriteTimeUtc);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        // ArgumentException: datum na 9999; CopyFileEx heeft de wijzigingsdatum dan al ruw meegenomen
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { }
         return 0;
     }
 

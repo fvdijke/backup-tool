@@ -12,7 +12,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationHighDpiMode>SystemAware</ApplicationHighDpiMode>
     <Product>Backup</Product>
-    <Version>2.1.0</Version>
+    <Version>2.1.1</Version>
     <!-- Ã©Ã©n EXE; de .NET 9-runtime staat al op deze pc -->
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
